@@ -68,7 +68,12 @@ backend
 
 
 cd reppoo-backend
+
+
 npm install
+
+
+
 npm run develop
 
 
