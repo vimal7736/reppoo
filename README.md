@@ -1,77 +1,101 @@
-# Reppoo AI health Project
+# Reppoo - AI Wellness Platform
 
-This project is a **full-stack landing page application** with a **Next.js frontend** and a **Strapi backend**, both deployed on **Vercel**. The app demonstrates dynamic content management, responsive UI
+A modern Next.js web application with Strapi CMS backend for managing wellness content and user authentication.
 
----
 
-## **Project Overview**
 
-- **Frontend:** Next.js  
-- **Backend:** Strapi 
-- **Database:** SQLite
-- **Hosting:** Vercel (both frontend and backend)
+## 🔧 Prerequisites
 
----
-
-## **Features Implemented**
-
-### Frontend (`reppoo-landing`)
-
-- Landing page with dynamic sections  
-- Testimonials section integrated with Strapi  
-- Responsive design for mobile and desktop  
-- API integration with backend Strapi CMS  
-- Environment variables for API endpoints  
-
-### Backend (`reppoo-backend`)
-
-- Strapi CMS for managing content dynamically  
-- File upload support (images, avatars)  
-- Custom collections for testimonials, projects, etc.  
-- REST API endpoints exposed for frontend consumption  
-- CORS configured to allow frontend requests  
+- **Node.js** (v18.x or higher) - [Download here](https://nodejs.org/)
+- **npm** (v9.x or higher) or **yarn** (v1.22.x or higher)
+- **Strapi Backend** - Running on `http://localhost:1337` (or your configured URL)
 
 ---
 
-## **Folder Structure**
-landing/
-├─ reppoo-landing/ # Next.js frontend
-│ ├─ pages/
-│ ├─ public/
-│ ├─ components/
-│ ├─ package.json
-│ └─ ...
-├─ reppoo-backend/ # Strapi backend
-│ ├─ api/
-│ ├─ config/
-│ ├─ uploads/
-│ ├─ package.json
-│ └─ ...
-└─ README.md
+## 📦 Installation
 
-
----
-
-## **Local Setup**
-
-### Backend (Strapi)
-
-1. Install dependencies:
+### Step 1: Clone the Repository
 
 ```bash
-cd reppoo-backend
+git clone https://github.com/vimal7736/reppoo.git
+cd reppoo-frontend
+```
+
+### Step 2: Install Dependencies
+
+Using npm:
+```bash
 npm install
-npm run develop
+```
 
-# Admin panel: http://localhost:1337/admin
-
-
-# frontend
-cd reppoo-landing
-npm install
+Or using yarn:
+```bash
+yarn install
+```
 
 
-# env.local
-NEXT_PUBLIC_API_URL=http://localhost:1337
+##  Environment Setup
+
+
+
+Create a `.env.local` file in the root directory:
+
+```bash
+touch .env.local
+```
+
+### Step 2: Configure Environment Variables
+
+Add the following variables to `.env.local`:
+
+```env
+
+
+# Strapi Backend URL
+NEXT_PUBLIC_STRAPI_URL=http://localhost:1337
+
+
+
+use this token : 
+
+
+NEXT_PUBLIC_STRAPI_API_TOKEN=d8b07b6b1b5b5c07d8b2345c852bac450cd5e9efa6717e96d180b7c07a72a2c68ef6e4bc6abb33b81fcffc13355871f7b38f657e2b7765badef73bff6efdc19da45344dee87a5c8b22aa39c2c396776dffc4104469363898572f7c3d3eef62429d4941b2901fdb5cc5d9a70eba184becdf766471b751222a6005484e8f1c686
+
+
+```
+
+**Important Notes:**
+- Replace `http://localhost:1337` with your Strapi backend URL if different
+- The API token can find above
+- JWT tokens are stored in localStorage after user login
+
+---
+
+## 🚀 Running the Application
+
+### Development Mode
+
+```bash
 npm run dev
-# Frontend available at http://localhost:3000
+```
+
+
+
+The application will start at: **http://localhost:3000**
+
+
+
+## 👤 Admin Authentication
+
+### Default Admin Credentials
+
+When you first access the application, you'll be prompted to login:
+
+```
+Email: vimal@vimal.in
+Password: vimal123
+
+```
+
+
+NEXT_PUBLIC_STRAPI_API_TOKEN=d8b07b6b1b5b5c07d8b2345c852bac450cd5e9efa6717e96d180b7c07a72a2c68ef6e4bc6abb33b81fcffc13355871f7b38f657e2b7765badef73bff6efdc19da45344dee87a5c8b22aa39c2c396776dffc4104469363898572f7c3d3eef62429d4941b2901fdb5cc5d9a70eba184becdf766471b751222a6005484e8f1c686
