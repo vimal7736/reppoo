@@ -63,8 +63,20 @@ npm run dev
 ```
 
 
+backend 
+^^^^^^^
 
-The application will start at: **http://localhost:3000**
+
+cd reppoo-backend
+npm install
+npm run develop
+
+
+
+server will start @ localhost:1337
+
+
+
 
 
 
@@ -81,11 +93,7 @@ Password: vimal123
 ```
 
 
- Clone Backend Data
-You can clone or access the backend data running at:
-http://localhost:1337
-
-Or log in to the Strapi Admin Dashboard:
+  log in to the Strapi Admin Dashboard:
 http://localhost:1337/admin/auth/login
 
 Use the following credentials:
