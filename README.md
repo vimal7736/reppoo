@@ -1,6 +1,6 @@
 # Reppoo - AI Wellness Platform
 
-A modern Next.js web application with Strapi CMS backend for managing wellness content and user authentication.
+A Next.js web application with Strapi CMS backend for managing wellness content and user authentication.
 
 
 
