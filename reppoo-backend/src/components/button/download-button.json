@@ -1,0 +1,17 @@
+{
+  "collectionName": "components_button_download_buttons",
+  "info": {
+    "displayName": "download-button",
+    "icon": "arrowDown"
+  },
+  "options": {},
+  "attributes": {
+    "platform": {
+      "type": "text"
+    },
+    "icon": {
+      "type": "text"
+    }
+  },
+  "config": {}
+}
