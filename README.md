@@ -27,7 +27,7 @@ npm install
 Create a `.env.local` file in the root directory:
 
 
-# Strapi Backend URL
+
 
 NEXT_PUBLIC_STRAPI_URL=http://localhost:1337
 
