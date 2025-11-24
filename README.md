@@ -1,4 +1,4 @@
-# Reppoo - AI Wellness Platform
+8# Reppoo - AI Wellness Platform
 
 
 
@@ -79,7 +79,10 @@ Password: vimal123
 http://localhost:1337/admin/auth/login
 
 Use the following credentials:
+
+
 Email: vimalonboard69@gmail.com
+
 Password: 11El2840
 
 
