@@ -1,0 +1,44 @@
+import { requireSuperadmin } from "@/lib/admin/auth";
+import { NextResponse } from "next/server";
+
+/**
+ * GET /api/admin/factors
+ * Returns all emission factors. Requires superadmin role.
+ *
+ * PATCH /api/admin/factors
+ * Updates a single factor's kg_co2e_per_unit value.
+ * Body: { id: string, kg_co2e_per_unit: number }
+ */
+export async function GET() {
+  const result = await requireSuperadmin();
+  if ("error" in result) return result.error;
+  const admin = result.admin;
+
+  const { data: factors } = await admin
+    .from("emission_factors")
+    .select("id, fuel_type, unit, kg_co2e_per_unit, scope, valid_from, valid_to")
+    .order("fuel_type");
+
+  return NextResponse.json({ factors: factors ?? [] });
+}
+
+export async function PATCH(request: Request) {
+  const result = await requireSuperadmin();
+  if ("error" in result) return result.error;
+  const admin = result.admin;
+
+  const { id, kg_co2e_per_unit } = await request.json();
+
+  if (!id || typeof kg_co2e_per_unit !== "number" || kg_co2e_per_unit <= 0) {
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+  }
+
+  const { error } = await admin
+    .from("emission_factors")
+    .update({ kg_co2e_per_unit })
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ success: true });
+}

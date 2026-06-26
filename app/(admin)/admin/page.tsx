@@ -1,0 +1,359 @@
+"use client";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import {
+  Building2, Users, TrendingUp, FileText, Database,
+  ArrowUpRight, UserPlus, Upload, Zap, Flame,
+} from "lucide-react";
+import type { AdminStats, AdminActivity } from "@/types";
+import { AdminSubNav } from "./AdminSubNav";
+
+/* ── Tier colors ────────────────────────────────────────────── */
+const TIER_BAR_COLORS: Record<string, string> = {
+  free: "var(--text-muted)",
+  starter: "#3b82f6",
+  business: "var(--brand-green)",
+};
+
+export default function AdminOverviewPage() {
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [activities, setActivities] = useState<AdminActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const [statsRes, activityRes] = await Promise.all([
+        fetch("/api/admin/stats"),
+        fetch("/api/admin/activity"),
+      ]);
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (activityRes.ok) {
+        const d = await activityRes.json();
+        setActivities(d.activities ?? []);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-4 lg:space-y-6 animate-pulse">
+        {/* KPI skeleton — 2 cols mobile → 5 tablet/desktop */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 lg:gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className={`premium-card p-2.5 lg:p-3.5 h-full flex flex-col justify-between ${i === 4 ? "col-span-2 sm:col-span-1" : ""}`}>
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="h-2.5 w-16 rounded" style={{ background: "var(--bg-inset)" }} />
+                  <div className="w-6.5 h-6.5 lg:w-7.5 lg:h-7.5 rounded-lg" style={{ background: "var(--bg-inset)" }} />
+                </div>
+                <div className="h-6 w-12 rounded mt-2.5" style={{ background: "var(--bg-inset)" }} />
+              </div>
+              <div className="h-2.5 mt-1 lg:mt-1.5" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const kpis = [
+    {
+      label: "Total Organisations",
+      value: stats?.total_orgs ?? 0,
+      icon: <Building2 className="w-3.5 h-3.5" />,
+      accent: "orange" as const,
+      href: "/admin/organisations",
+    },
+    {
+      label: "Total Users",
+      value: stats?.total_users ?? 0,
+      icon: <Users className="w-3.5 h-3.5" />,
+      accent: "green" as const,
+      href: "/admin/users",
+    },
+    {
+      label: "Monthly MRR",
+      value: `£${(stats?.mrr ?? 0).toLocaleString("en-GB")}`,
+      icon: <TrendingUp className="w-3.5 h-3.5" />,
+      accent: "green" as const,
+    },
+    {
+      label: "Bills Today",
+      value: stats?.bills_today ?? 0,
+      icon: <FileText className="w-3.5 h-3.5" />,
+      accent: "orange" as const,
+    },
+    {
+      label: "Total Bills",
+      value: (stats?.total_bills ?? 0).toLocaleString("en-GB"),
+      icon: <Database className="w-3.5 h-3.5" />,
+      accent: "green" as const,
+    },
+  ];
+
+  return (
+    <div className="space-y-4 lg:space-y-6 animate-scale-in">
+      {/* ── KPI Cards — 2 cols mobile → 5 tablet/desktop ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 lg:gap-4">
+        {kpis.map(({ label, value, icon, accent, href }, idx) => {
+          const accentColor = accent === "green" ? "var(--brand-green)" : "var(--brand-orange)";
+          const iconColor = accent === "green" ? "var(--brand-green-dark)" : "var(--brand-orange-dark)";
+
+          const card = (
+            <div
+              className="premium-card p-2.5 lg:p-3.5 group relative overflow-hidden transition-all duration-500 hover:-translate-y-1 h-full flex flex-col justify-between"
+              style={{ borderTop: `2px solid ${accentColor}` }}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2 lg:mb-2.5">
+                  <span className="text-[8px] lg:text-[9px] font-black uppercase tracking-[0.15em] text-text-muted opacity-50">
+                    {label}
+                  </span>
+                  <div
+                    className="w-6.5 h-6.5 lg:w-7.5 lg:h-7.5 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 shrink-0"
+                    style={{
+                      background: "var(--neu-base)",
+                      boxShadow: "var(--shadow-inset-sm)",
+                      color: iconColor,
+                    }}
+                  >
+                    {icon}
+                  </div>
+                </div>
+                <span className="text-lg lg:text-xl font-black tracking-tighter block" style={{ color: "var(--text-primary)" }}>
+                  {value}
+                </span>
+              </div>
+              {href ? (
+                <div className="flex items-center gap-1 mt-1 lg:mt-1.5 text-[8px] lg:text-[9px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "var(--text-muted)" }}>
+                  View All <ArrowUpRight className="w-2.5 h-2.5" />
+                </div>
+              ) : (
+                <div className="h-2.5 mt-1 lg:mt-1.5" />
+              )}
+              <div className="absolute -bottom-4 -right-4 w-16 h-16 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: `${accentColor}10` }} />
+            </div>
+          );
+
+          return href ? (
+            <Link key={label} href={href} className={`block h-full ${idx === 4 ? "col-span-2 sm:col-span-1" : ""}`}>
+              {card}
+            </Link>
+          ) : (
+            <div key={label} className={`h-full ${idx === 4 ? "col-span-2 sm:col-span-1" : ""}`}>{card}</div>
+          );
+        })}
+      </div>
+
+      {/* ── Row: Plan Distribution + Revenue Breakdown — stacks on mobile ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
+        {/* Plan Distribution */}
+        <div
+          className="rounded-2xl p-4 lg:p-6"
+          style={{
+            background: "var(--neu-base)",
+            boxShadow: "var(--shadow-raised)",
+            border: "var(--card-border)",
+          }}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted opacity-50 mb-4 lg:mb-5">
+            Plan Distribution
+          </p>
+          <div className="space-y-4">
+            {(["free", "starter", "business"] as const).map((tier) => {
+              const count = stats?.tier_counts?.[tier] ?? 0;
+              const total = stats?.total_orgs ?? 1;
+              const pct = total > 0 ? (count / total) * 100 : 0;
+              const color = TIER_BAR_COLORS[tier];
+              return (
+                <div key={tier}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                      <span className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>
+                        {tier}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
+                        {count}
+                      </span>
+                      <span className="text-[9px] font-bold text-text-muted opacity-40">
+                        {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="w-full h-2.5 rounded-full overflow-hidden"
+                    style={{
+                      background: "var(--neu-base)",
+                      boxShadow: "var(--shadow-inset-xs)",
+                    }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 ease-out"
+                      style={{ width: `${pct}%`, background: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Revenue Breakdown */}
+        <div
+          className="rounded-2xl p-4 lg:p-6"
+          style={{
+            background: "var(--neu-base)",
+            boxShadow: "var(--shadow-raised)",
+            border: "var(--card-border)",
+          }}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted opacity-50 mb-4 lg:mb-5">
+            Revenue Breakdown
+          </p>
+          <div className="space-y-3 lg:space-y-4">
+            {[
+              { tier: "Starter", count: stats?.tier_counts?.starter ?? 0, price: 24, color: "#3b82f6" },
+              { tier: "Business", count: stats?.tier_counts?.business ?? 0, price: 99, color: "var(--brand-green)" },
+            ].map(({ tier, count, price, color }) => (
+              <div
+                key={tier}
+                className="flex items-center justify-between p-3 lg:p-4 rounded-xl"
+                style={{
+                  background: "var(--bg-inset)",
+                  border: "var(--card-border)",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 rounded-full" style={{ background: color }} />
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--text-primary)" }}>
+                      {count} × {tier}
+                    </p>
+                    <p className="text-[9px] font-bold text-text-muted opacity-40 uppercase tracking-widest">
+                      £{price} / mo each
+                    </p>
+                  </div>
+                </div>
+                <span className="text-base lg:text-lg font-black tracking-tighter" style={{ color: "var(--text-primary)" }}>
+                  £{(count * price).toLocaleString("en-GB")}
+                </span>
+              </div>
+            ))}
+
+            <div
+              className="flex items-center justify-between p-3 lg:p-4 rounded-xl"
+              style={{
+                background: "rgba(249,115,22,0.06)",
+                border: "1px solid rgba(249,115,22,0.15)",
+              }}
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--brand-orange)" }}>
+                Total MRR (ex VAT)
+              </span>
+              <span className="text-xl lg:text-2xl font-black tracking-tighter" style={{ color: "var(--brand-orange)" }}>
+                £{(stats?.mrr ?? 0).toLocaleString("en-GB")}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent Activity Feed ──────────────────────────────── */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{
+          background: "var(--neu-base)",
+          boxShadow: "var(--shadow-raised)",
+          border: "var(--card-border)",
+        }}
+      >
+        <div className="px-4 lg:px-6 py-4 lg:py-5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--brand-orange)" }} />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
+              Platform Activity
+            </p>
+          </div>
+          <Link
+            href="/admin/activity"
+            className="px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 hover:shadow-lg"
+            style={{
+              background: "var(--bg-inset)",
+              color: "var(--text-muted)",
+            }}
+          >
+            Full Log <ArrowUpRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        <div className="p-3 lg:p-4">
+          {activities.length === 0 ? (
+            <div className="py-10 lg:py-12 text-center">
+              <p className="text-sm font-bold text-text-muted opacity-40">No activity recorded yet</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {activities.slice(0, 8).map((a) => (
+                <ActivityRow key={a.id} activity={a} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Activity Row ──────────────────────────────────────────── */
+function ActivityRow({ activity }: { activity: AdminActivity }) {
+  const cfg = {
+    signup: { Icon: UserPlus, color: "var(--brand-green)", bg: "rgba(34,197,94,0.10)" },
+    bill_upload: { Icon: Upload, color: "var(--brand-orange)", bg: "rgba(249,115,22,0.10)" },
+    tier_change: { Icon: TrendingUp, color: "#3b82f6", bg: "rgba(59,130,246,0.10)" },
+    factor_edit: { Icon: Zap, color: "#a855f7", bg: "rgba(168,85,247,0.10)" },
+  }[activity.type] ?? { Icon: Flame, color: "var(--text-muted)", bg: "var(--bg-inset)" };
+
+  const timeAgo = getTimeAgo(activity.created_at);
+
+  return (
+    <div className="flex items-center gap-3 lg:gap-4 px-3 lg:px-4 py-3 lg:py-3.5 rounded-xl group transition-all duration-300 hover:bg-white/5">
+      <div
+        className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
+        style={{ background: cfg.bg }}
+      >
+        <cfg.Icon className="w-4 h-4" style={{ color: cfg.color }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
+          {activity.description}
+        </p>
+        {activity.org_name && (
+          <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted opacity-40 truncate">
+            {activity.org_name}
+          </p>
+        )}
+      </div>
+      <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted opacity-40 shrink-0">
+        {timeAgo}
+      </span>
+    </div>
+  );
+}
+
+function getTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}

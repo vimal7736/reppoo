@@ -1,0 +1,635 @@
+"use client";
+import { useState, useRef } from "react";
+import Link from "next/link";
+import { useToast } from "@/components/ui/Toast";
+import {
+  Upload, CheckCircle, Calendar, Edit3, Zap, Flame,
+  Droplets, Fuel, ArrowUpRight, Leaf
+} from "lucide-react";
+
+type BillTypeKey = "electricity" | "gas" | "water" | "fuel_diesel" | "fuel_petrol";
+type Stage = "upload" | "processing" | "review" | "result";
+
+interface OcrResult {
+  supplier: string | null;
+  bill_period: string | null;
+  usage: number | null;
+  unit: string;
+  amount_due: number | null;
+  account_number: string | null;
+}
+
+interface SaveResult {
+  co2_kg: number;
+  factor_used: number;
+  scope: string;
+  equivalents: { miles_driven: number; trees_one_year: number };
+}
+
+const BILL_TYPES: { key: BillTypeKey; label: string; sub?: string; icon: React.ReactNode }[] = [
+  { key: "electricity", label: "Electricity", icon: <Zap className="w-4 h-4" /> },
+  { key: "gas", label: "Gas", icon: <Flame className="w-4 h-4" /> },
+  { key: "water", label: "Water", icon: <Droplets className="w-4 h-4" /> },
+  { key: "fuel_diesel", label: "Fuel", sub: "Diesel", icon: <Fuel className="w-4 h-4" /> },
+  { key: "fuel_petrol", label: "Fuel", sub: "Petrol", icon: <Fuel className="w-4 h-4" /> },
+];
+
+export default function UploadPage() {
+  const [stage, setStage] = useState<Stage>("upload");
+  const [billType, setBillType] = useState<BillTypeKey>("electricity");
+  const [dragOver, setDragOver] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const toast = useToast();
+
+  // Upload step state
+  const [storagePath, setStoragePath] = useState("");
+
+  // OCR step state
+  const [ocr, setOcr] = useState<OcrResult | null>(null);
+  const [usage, setUsage] = useState<string>("");
+  const [unit, setUnit] = useState<string>("kWh");
+  const [billDate, setBillDate] = useState<string>("");
+  const [costGbp, setCostGbp] = useState<string>("");
+
+  // Save result
+  const [result, setResult] = useState<SaveResult | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const billDateInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Step 1: Upload PDF ────────────────────────────────────────────────────
+  async function handleFile(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File is too large. Maximum size is 10MB.");
+      return;
+    }
+    setFileName(file.name);
+    setStage("processing");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bill_type", billType);
+
+    const uploadRes = await fetch("/api/bills/upload", { method: "POST", body: formData });
+    const uploadData = await uploadRes.json();
+
+    if (!uploadRes.ok) {
+      toast.error(uploadData.error ?? "Upload failed");
+      setStage("upload");
+      return;
+    }
+
+    setStoragePath(uploadData.storagePath);
+
+    // ── Step 2: OCR ────────────────────────────────────────────────────────
+    const ocrRes = await fetch("/api/bills/ocr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storagePath: uploadData.storagePath, billType, fileName: file.name }),
+    });
+    const ocrData = await ocrRes.json();
+
+    if (ocrRes.ok) {
+      setOcr(ocrData);
+      setUsage(ocrData.usage != null ? String(ocrData.usage) : "");
+      setUnit(ocrData.unit ?? "kWh");
+      setCostGbp(ocrData.amount_due != null ? String(ocrData.amount_due) : "");
+    } else if (ocrRes.status === 422) {
+      // Validation failed (wrong bill type)
+      toast.error(ocrData.error);
+      setStage("upload");
+      return;
+    } else {
+      // OCR failed — show error toast and still go to review with blank fields
+      toast.error(ocrData?.error ?? "OCR failed. Please enter details manually.");
+      setOcr(null);
+      setUsage("");
+      setUnit(billType === "water" ? "m3" : billType.startsWith("fuel") ? "litre" : "kWh");
+    }
+
+    // Default bill date to today if not extracted
+    setBillDate(new Date().toISOString().slice(0, 10));
+    setStage("review");
+  }
+
+  function handleManualEntry() {
+    setFileName("");
+    setStoragePath("");
+    setOcr(null);
+    setUsage("");
+    setCostGbp("");
+    setUnit(billType === "water" ? "m3" : billType.startsWith("fuel") ? "litre" : "kWh");
+    setBillDate(new Date().toISOString().slice(0, 10));
+    setStage("review");
+  }
+
+  // ── Step 3: Save Bill ─────────────────────────────────────────────────────
+  async function handleSave() {
+    if (!usage || !billDate) {
+      toast.error("Please enter usage and bill date.");
+      return;
+    }
+
+    setSaving(true);
+
+    const res = await fetch("/api/bills/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bill_type: billType,
+        bill_date: billDate,
+        usage_amount: Number(usage),
+        usage_unit: unit,
+        supplier: ocr?.supplier ?? null,
+        account_number: ocr?.account_number ?? null,
+        cost_gbp: costGbp ? Number(costGbp) : null,
+        pdf_url: storagePath,
+        ocr_raw: ocr,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast.error(data.error ?? "Failed to save bill");
+      setSaving(false);
+      return;
+    }
+
+    setResult(data);
+    setStage("result");
+  }
+
+  function reset() {
+    setStage("upload");
+    setFileName("");
+    setOcr(null);
+    setUsage("");
+    setResult(null);
+    setSaving(false);
+  }
+
+  const stages: Stage[] = ["upload", "processing", "review", "result"];
+  const currentIdx = stages.indexOf(stage);
+  const reviewLabelClass = "text-[10px] font-black uppercase tracking-[0.2em] ml-1 text-text-muted";
+  const reviewInputClass =
+    "recessed-input w-full px-5 lg:px-6 py-3.5 lg:py-4 text-sm font-black placeholder:text-text-muted/40";
+  const reviewLargeInputClass =
+    "recessed-input w-full px-5 lg:px-8 py-4 lg:py-6 text-2xl lg:text-3xl font-black placeholder:text-text-muted/40 pr-20 lg:pr-28";
+  const billDateLabel = billDate
+    ? new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date(`${billDate}T00:00:00`))
+    : "Select month";
+
+  function openBillDatePicker() {
+    const input = billDateInputRef.current;
+    if (!input) return;
+
+    input.focus();
+    input.showPicker?.();
+  }
+
+  return (
+    <div className="space-y-2 lg:space-y-4 animate-fade-in !pb-0">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Upload className="w-4 h-4 lg:w-5 lg:h-5" style={{ color: "var(--brand-green)" }} />
+            <h1 className="text-xl lg:text-2xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
+              Upload Bill
+            </h1>
+          </div>
+          <p className="text-xs lg:text-sm" style={{ color: "var(--text-muted)" }}>
+            AI extracts data from your utility bills automatically
+          </p>
+        </div>
+
+        <div
+          className="neu-raised inline-flex items-center gap-1.5 lg:gap-2 px-2.5 lg:px-4 py-1.5 lg:py-2 rounded-xl shrink-0"
+          style={{ color: "var(--brand-green-dark)" }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-gt-green-500 animate-pulse-green inline-block" />
+          <span className="text-[10px] lg:text-xs font-bold uppercase tracking-widest">DEFRA Active</span>
+        </div>
+      </div>
+
+      {/* ── Step Indicator ────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-2 lg:gap-4">
+        {["Upload", "Processing", "Review", "Result"].map((s, i) => {
+          const done = i < currentIdx;
+          const active = i === currentIdx;
+          return (
+            <div
+              key={s}
+              className={`relative flex flex-col items-center gap-1.5 lg:gap-2 py-2.5 lg:py-3 rounded-xl transition-all duration-300 ${active ? "neu-inset" : done ? "neu-raised opacity-70" : "neu-raised opacity-40"
+                }`}
+            >
+              <div className={`w-5 h-5 lg:w-6 lg:h-6 rounded-full flex items-center justify-center text-[9px] lg:text-[10px] font-black transition-colors ${done ? "bg-gt-green-500 text-cream-50" : active ? "bg-gt-green-100 text-gt-green-700" : "bg-bg-inset text-text-muted"
+                }`}>
+                {done ? "✓" : i + 1}
+              </div>
+              <span className={`text-[9px] lg:text-[10px] font-bold uppercase tracking-wider lg:tracking-widest ${active ? "text-text-primary" : "text-text-muted"}`}>
+                {s}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stage: Upload */}
+      {stage === "upload" && (
+        <div className="space-y-8 animate-scale-in">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between" id="tour-upload-type">
+              <label className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: "var(--text-muted)" }}>
+                1. Select Bill Type
+              </label>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-bg-inset text-text-muted">
+                Choose one to start
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 lg:gap-4">
+              {BILL_TYPES.map(({ key, label, sub, icon }) => {
+                const active = billType === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setBillType(key)}
+                    className={`group relative flex flex-col items-center justify-center gap-2 lg:gap-3 p-4 lg:p-6 rounded-2xl lg:rounded-[2rem] transition-all duration-500 overflow-hidden ${active
+                      ? "active-selection"
+                      : "premium-card hover:bg-white/40"
+                      }`}
+                  >
+                    {active && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-gt-green-500/10 to-transparent opacity-50" />
+                    )}
+
+                    <div className={`relative z-10 w-9 h-9 lg:w-12 lg:h-12 rounded-xl lg:rounded-2xl flex items-center justify-center transition-all duration-500 ${active
+                      ? "bg-gt-green-500 text-white shadow-lg shadow-gt-green-500/40 rotate-3"
+                      : "bg-bg-inset text-text-muted group-hover:scale-110 group-hover:bg-gt-green-100 group-hover:text-gt-green-600"
+                      }`}>
+                      {icon}
+                    </div>
+
+                    <div className="relative z-10 flex flex-col items-center">
+                      <span className={`text-[10px] lg:text-[11px] font-black uppercase tracking-wider lg:tracking-widest transition-colors ${active ? "text-gt-green-900" : "text-text-primary"
+                        }`}>
+                        {label}
+                      </span>
+                      {sub && (
+                        <span className={`text-[9px] font-bold mt-0.5 opacity-60 ${active ? "text-gt-green-700" : "text-text-muted"
+                          }`}>
+                          {sub}
+                        </span>
+                      )}
+                    </div>
+
+                    {active && (
+                      <div className="absolute top-2 right-2 lg:top-3 lg:right-3 w-4 h-4 bg-gt-green-500 rounded-full flex items-center justify-center animate-scale-in">
+                        <CheckCircle className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-6 lg:gap-8">
+            <label className="block text-xs font-black uppercase tracking-[0.2em]" style={{ color: "var(--text-muted)" }}>
+              2. Upload Document
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            />
+
+            <div
+              id="tour-upload-dropzone"
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files[0];
+                if (f) handleFile(f);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`group relative overflow-hidden rounded-2xl lg:rounded-[2.5rem] p-8 lg:p-16 text-center transition-all duration-700 cursor-pointer ${dragOver
+                ? "active-selection scale-[0.99]"
+                : "premium-card border-dashed border-2 hover:border-solid hover:bg-white/40"
+                }`}
+            >
+              <div className="relative z-10 flex flex-col items-center">
+                <div className={`w-14 h-14 lg:w-20 lg:h-20 rounded-2xl lg:rounded-3xl mb-4 lg:mb-6 flex items-center justify-center transition-all duration-700 ${dragOver ? "bg-gt-green-500 text-white shadow-2xl" : "bg-bg-inset text-gt-green-500 shadow-inner group-hover:scale-110 group-hover:bg-gt-green-100"
+                  }`}>
+                  <Upload className="w-7 h-7 lg:w-10 lg:h-10" />
+                </div>
+                <h3 className="text-base lg:text-lg font-black tracking-tight mb-2" style={{ color: "var(--text-primary)" }}>
+                  Drop your PDF or Image bill here
+                </h3>
+                <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  Securely upload your energy bill to extract CO₂ data automatically
+                  <span className="block mt-2 opacity-60 text-[9px] uppercase tracking-[0.15em]">Max size- 10MB</span>
+                </p>
+                <div className="mt-5 lg:mt-8 flex items-center gap-2 px-4 py-2 rounded-full bg-bg-inset/50 text-[10px] font-black uppercase tracking-widest text-text-muted group-hover:bg-gt-green-500 group-hover:text-white transition-colors">
+                  <span>Browse files</span>
+                  <ArrowUpRight className="w-3 h-3" />
+                </div>
+              </div>
+
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-gt-green-500/5 rounded-full blur-3xl" />
+              <div className="absolute -top-10 -left-10 w-40 h-40 bg-brand-orange/5 rounded-full blur-3xl" />
+            </div>
+
+            <div className="flex justify-center mt-4">
+              <button
+                type="button"
+                onClick={handleManualEntry}
+                className="text-xs font-bold text-text-muted hover:text-gt-green-600 transition-colors underline decoration-border-subtle hover:decoration-gt-green-500 underline-offset-4"
+              >
+                No PDF? Enter data manually instead.
+              </button>
+            </div>
+          </div>
+
+          <div id="tour-upload-security" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 lg:p-6 rounded-2xl lg:rounded-3xl glass-green border-none shadow-sm">
+            <div className="flex items-center gap-3 lg:gap-4">
+              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-gt-green-500/20 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-gt-green-600" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--brand-green-darker)" }}>
+                  Enterprise Security
+                </p>
+                <p className="text-[10px] font-bold opacity-70" style={{ color: "var(--brand-green-darker)" }}>
+                  Mindee AI OCR — end-to-end encrypted.
+                </p>
+              </div>
+            </div>
+            <Link href="/privacy" className="text-[10px] font-black uppercase tracking-widest text-gt-green-700 hover:underline shrink-0">
+              Privacy Policy
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Stage: Processing */}
+      {stage === "processing" && (
+        <div className="premium-card p-10 lg:p-20 text-center space-y-6 lg:space-y-8 animate-pulse border-none bg-white/40 backdrop-blur-xl">
+          <div className="relative w-24 h-24 mx-auto">
+            <div className="absolute inset-0 border-8 border-gt-green-500/10 rounded-[2rem]" />
+            <div className="absolute inset-0 border-8 border-gt-green-500 border-t-transparent rounded-[2rem] animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Zap className="w-10 h-10 text-gt-green-500" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h2 className="text-2xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
+              Analyzing Document
+            </h2>
+            <p className="text-sm font-bold opacity-60" style={{ color: "var(--text-muted)" }}>
+              Extracting semantic data for {billType} emissions...
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="px-4 py-2 rounded-full bg-gt-green-100 text-gt-green-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+              <CheckCircle className="w-3.5 h-3.5" /> Secure Link Established
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Stage: Review */}
+      {stage === "review" && (
+        <div className="space-y-4 lg:space-y-6 animate-scale-in">
+          <div className="premium-card p-5 lg:p-8 space-y-5 lg:space-y-8">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 lg:gap-4">
+                <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl lg:rounded-2xl bg-gt-green-500 text-white flex items-center justify-center shadow-lg shadow-gt-green-500/30 shrink-0">
+                  <CheckCircle className="w-5 h-5 lg:w-6 lg:h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg lg:text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
+                    {ocr ? "Extraction Complete" : "Manual Entry"}
+                  </h2>
+                  <p className="text-xs font-bold opacity-60" style={{ color: "var(--text-muted)" }}>
+                    Verify the details below before saving
+                  </p>
+                </div>
+              </div>
+              <div className="px-2.5 lg:px-3 py-1.5 rounded-full bg-bg-inset text-[10px] font-black uppercase tracking-widest text-text-muted shrink-0">
+                Audit Mode
+              </div>
+            </div>
+
+            {ocr && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4 p-4 lg:p-6 rounded-2xl lg:rounded-3xl bg-bg-inset/30 border border-border-subtle shadow-inner">
+                {[
+                  { label: "Supplier", value: ocr.supplier },
+                  { label: "Period", value: ocr.bill_period },
+                  { label: "Account", value: ocr.account_number },
+                  { label: "Cost", value: ocr.amount_due != null ? `£${Number(ocr.amount_due).toFixed(2)}` : null },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex flex-col">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-text-muted mb-1 opacity-60">
+                      {item.label}
+                    </span>
+                    <span className="text-xs font-black text-text-primary truncate">
+                      {item.value || "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-8">
+              <div className="space-y-2 lg:space-y-3">
+                <label className={reviewLabelClass}>
+                  Bill Date *
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={openBillDatePicker}
+                    className={`${reviewInputClass} flex items-center justify-between text-left`}
+                  >
+                    <span className="truncate">{billDateLabel}</span>
+                    <Calendar className="w-5 h-5 text-text-muted shrink-0" aria-hidden="true" />
+                  </button>
+                  <input
+                    ref={billDateInputRef}
+                    type="date"
+                    value={billDate}
+                    onChange={(e) => setBillDate(e.target.value)}
+                    className="gt-date-input sr-only"
+                    aria-label="Bill date"
+                    tabIndex={-1}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 lg:space-y-3">
+                <label className={reviewLabelClass}>
+                  Total Cost (£)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={costGbp}
+                    onChange={(e) => setCostGbp(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    max="999999"
+                    step="0.01"
+                    className={`${reviewInputClass} pr-16 lg:pr-20`}
+                  />
+                  <span className="pointer-events-none absolute right-5 lg:right-6 top-1/2 -translate-y-1/2 text-xs font-black text-text-muted/50">GBP</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 lg:space-y-3">
+              <label className={reviewLabelClass}>
+                Energy Usage ({unit}) *
+              </label>
+              <div className="relative group">
+                <input
+                  type="number"
+                  value={usage}
+                  onChange={(e) => setUsage(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  max="9999999"
+                  step="any"
+                  className={reviewLargeInputClass}
+                />
+                <div className="pointer-events-none absolute right-4 lg:right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 lg:gap-3">
+                  <span className="text-xs lg:text-sm font-black uppercase tracking-widest text-text-muted/50">{unit}</span>
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-bg-elevated shadow-sm flex items-center justify-center border border-border-subtle group-focus-within:border-gt-green-500/40 transition-colors">
+                    <Edit3 className="w-4 h-4 lg:w-5 lg:h-5 text-text-muted" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 lg:p-6 rounded-xl lg:rounded-[2rem] bg-gradient-to-r from-gt-green-500/10 to-transparent border border-gt-green-500/20 flex items-start gap-3 lg:gap-4">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gt-green-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-gt-green-500/20">
+                <Leaf className="w-4 h-4 lg:w-5 lg:h-5" />
+              </div>
+              <p className="text-xs font-bold leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                Applied 2025 DEFRA standard: <span className="text-gt-green-700 font-black">Scope 2 (Market-based)</span>.
+                Emissions calculated on confirmation.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="group relative w-full bg-gt-green-900 hover:bg-black disabled:opacity-70 text-white py-4 lg:py-6 rounded-xl lg:rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs transition-all shadow-2xl hover:shadow-gt-green-500/20 active:scale-[0.98] overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-gt-green-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                {saving && <Leaf className="w-4 h-4 animate-spin" />}
+                {saving ? "Calculating..." : "Calculate Impact"}
+                {!saving && <ArrowUpRight className="w-4 h-4" />}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stage: Result */}
+      {stage === "result" && result && (
+        <div className="space-y-4 lg:space-y-8 animate-scale-in">
+          <div className="premium-card p-6 lg:p-12 text-center space-y-6 lg:space-y-10 border-none bg-white/60 backdrop-blur-2xl">
+            <div className="space-y-3 lg:space-y-4">
+              <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gt-green-500 text-white rounded-2xl lg:rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-gt-green-500/40 rotate-6 animate-fade-in">
+                <CheckCircle className="w-8 h-8 lg:w-10 lg:h-10" />
+              </div>
+              <div>
+                <h2 className="text-2xl lg:text-3xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
+                  Impact Calculated
+                </h2>
+                <p className="text-xs font-black uppercase tracking-[0.3em] opacity-40 mt-2">
+                  Transaction ID: GT-{Math.random().toString(36).slice(2, 8).toUpperCase()}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative p-6 lg:p-12 rounded-2xl lg:rounded-[3rem] bg-black text-white overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 p-4 lg:p-8 opacity-20">
+                <Leaf className="w-24 h-24 lg:w-40 lg:h-40 rotate-12" />
+              </div>
+
+              <div className="relative z-10 space-y-4 lg:space-y-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-3 lg:mb-4">
+                    Total Carbon Footprint
+                  </p>
+                  <div className="flex items-baseline justify-center gap-2 lg:gap-3">
+                    <span className="text-5xl lg:text-7xl font-black tracking-tighter animate-fade-in">
+                      {result.co2_kg.toFixed(2)}
+                    </span>
+                    <span className="text-lg lg:text-2xl font-black opacity-40">kg CO₂e</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-white/10 w-20 mx-auto" />
+
+                <div className="flex justify-center gap-8 lg:gap-12">
+                  <div className="text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Equivalent</p>
+                    <p className="text-base lg:text-lg font-black">{result.equivalents.miles_driven.toLocaleString("en-GB")} <span className="text-xs opacity-50">miles</span></p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Offset</p>
+                    <p className="text-base lg:text-lg font-black">{result.equivalents.trees_one_year} <span className="text-xs opacity-50">trees</span></p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-gt-green-500/30 rounded-full blur-[80px]" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 lg:gap-6">
+              {[
+                { label: "Usage", value: `${usage} ${unit}` },
+                { label: "Factor", value: result.factor_used },
+                { label: "Scope", value: result.scope },
+              ].map((stat, i) => (
+                <div key={i} className="p-4 lg:p-6 rounded-2xl lg:rounded-3xl bg-bg-inset/50 border border-border-subtle text-left">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-text-muted mb-1.5 lg:mb-2">{stat.label}</p>
+                  <p className="text-xs lg:text-sm font-black text-text-primary">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 lg:gap-6">
+            <button
+              type="button"
+              onClick={reset}
+              className="premium-card flex-1 py-4 lg:py-6 rounded-xl lg:rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 hover:bg-gt-green-500 hover:text-white hover:border-transparent"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Upload Another <Upload className="w-4 h-4" />
+            </button>
+            <Link
+              href="/dashboard"
+              className="group premium-card flex-1 bg-white py-4 lg:py-6 rounded-xl lg:rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 hover:bg-black hover:text-white"
+            >
+              Back to Dashboard <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

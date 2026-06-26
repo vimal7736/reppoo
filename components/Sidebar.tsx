@@ -1,0 +1,466 @@
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+import {
+  LayoutDashboard, Upload, History, FileText,
+  Users, CreditCard, LogOut, Leaf,
+  Scale, Target, UserCircle, LifeBuoy, PlayCircle,
+} from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
+import withAsyncDisabled from "../lib/withAsyncDisabled";
+
+const NAV_ITEMS = [
+  { label: "Dashboard",  href: "/dashboard", icon: LayoutDashboard, tourId: "#tour-dash-kpi-footprint" },
+  { label: "Upload Bill", href: "/upload",    icon: Upload, tourId: "#tour-upload-type" },
+  { label: "History",    href: "/history",   icon: History, tourId: "#tour-history-table" },
+  { label: "Reports",    href: "/reports",   icon: FileText, tourId: "#tour-reports-export" },
+  { label: "Compare",    href: "/compare",   icon: Scale, tourId: "#tour-compare-select" },
+  { label: "Targets",    href: "/targets",   icon: Target, tourId: "#tour-targets-advisor" },
+  { label: "Team",       href: "/team",      icon: Users, tourId: "#tour-team-invite" },
+  { label: "Profile",    href: "/profile",   icon: UserCircle, tourId: "#tour-profile-settings" },
+  { label: "Billing",    href: "/billing",   icon: CreditCard, tourId: "#tour-billing-plan" },
+];
+
+const TIER_CFG: Record<string, { label: string; style: React.CSSProperties }> = {
+  free: {
+    label: "Free",
+    style: {
+      background: "rgba(255,255,255,0.06)",
+      color: "rgba(255,255,255,0.45)",
+      boxShadow: "inset 2px 2px 5px rgba(0,0,0,0.35), inset -2px -2px 5px rgba(255,255,255,0.06)",
+      borderRadius: "6px",
+    },
+  },
+  starter: {
+    label: "Starter",
+    style: {
+      background: "rgba(249,115,22,0.15)",
+      color: "#fdba74",
+      boxShadow: "inset 3px 3px 6px rgba(100,30,0,0.45), inset -3px -3px 6px rgba(255,160,60,0.18)",
+      borderRadius: "6px",
+    },
+  },
+  business: {
+    label: "Business",
+    style: {
+      background: "rgba(34,197,94,0.12)",
+      color: "#86efac",
+      boxShadow: "inset 3px 3px 6px rgba(0,50,20,0.50), inset -3px -3px 6px rgba(80,200,110,0.16)",
+      borderRadius: "6px",
+    },
+  },
+};
+
+const BG  = "#1a4731";
+const ND  = "rgba(0,0,0,0.45)";
+const NL  = "rgba(255,255,255,0.08)";
+
+const inset   = `inset 4px 4px 10px ${ND}, inset -4px -4px 10px ${NL}`;
+const insetSm = `inset 2px 2px 6px ${ND}, inset -2px -2px 6px ${NL}`;
+const raised  = `4px 4px 10px ${ND}, -4px -4px 10px ${NL}`;
+
+const toggleBtnStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  boxShadow: inset,
+  color: "rgba(255,255,255,0.65)",
+  borderRadius: "10px",
+};
+
+interface SidebarProps {
+  userName:  string;
+  userEmail: string;
+  userRole:  string;
+  orgName:   string;
+  orgTier:   string;
+  collapsed: boolean;
+  onCollapseToggle: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  onNavigate?: () => void;
+  onSupportOpen?: () => void;
+}
+
+export default function Sidebar({
+  userName, userEmail, orgName, orgTier,
+  collapsed, onCollapseToggle,
+  mobileOpen, onMobileClose,
+  onNavigate, onSupportOpen,
+}: SidebarProps) {
+  const pathname = usePathname();
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTourMenuOpen, setIsTourMenuOpen] = useState(false);
+  const [showTourHint, setShowTourHint] = useState(false);
+
+  useEffect(() => {
+    const handleSkip = () => {
+      if (window.innerWidth >= 1024) {
+        setShowTourHint(true);
+        setTimeout(() => setShowTourHint(false), 7000);
+      }
+    };
+    window.addEventListener('tour-skipped', handleSkip);
+    return () => window.removeEventListener('tour-skipped', handleSkip);
+  }, []);
+
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < 1024); }
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // On mobile/tablet: always icon-only rail; on desktop: respect collapsed prop
+  const iconOnly = isMobile || collapsed;
+
+  function handleSignOut() {
+    window.location.href = "/api/auth/signout";
+  }
+
+  const initials = (userName || "User")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const safeTier = orgTier || "free";
+  const tierCfg  = TIER_CFG[safeTier] ?? TIER_CFG.free;
+
+  function activeStyle(active: boolean): React.CSSProperties {
+    if (iconOnly) {
+      return {
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 40, height: 40, borderRadius: 12, margin: "0 auto",
+        background: active ? "rgba(34,197,94,0.20)" : "transparent",
+        boxShadow: active ? inset : "none",
+        color: active ? "#86efac" : "rgba(255,255,255,0.55)",
+        transition: "background 150ms, color 150ms",
+        flexShrink: 0,
+      };
+    }
+    return active
+      ? {
+          display: "flex", alignItems: "center", gap: "0.75rem",
+          paddingTop: "0.6rem", paddingBottom: "0.6rem",
+          paddingLeft: "calc(0.75rem - 3px)",
+          borderLeft: "3px solid #22c55e",
+          borderRadius: "0 12px 12px 0",
+          background: "rgba(34,197,94,0.16)",
+          boxShadow: insetSm,
+          color: "#fff",
+          fontSize: "0.875rem", fontWeight: 600,
+          transition: "all 150ms",
+        }
+      : {
+          display: "flex", alignItems: "center", gap: "0.75rem",
+          paddingTop: "0.6rem", paddingBottom: "0.6rem",
+          paddingLeft: "calc(0.75rem - 3px)",
+          borderLeft: "3px solid transparent",
+          borderRadius: "0 12px 12px 0",
+          background: "transparent",
+          color: "rgba(255,255,255,0.55)",
+          fontSize: "0.875rem", fontWeight: 500,
+          transition: "all 150ms",
+        };
+  }
+
+  return (
+    <>
+    <aside
+      className={`fixed left-0 top-0 h-screen flex flex-col z-40 ${
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      } lg:translate-x-0`}
+      style={{
+        background: BG,
+        width: iconOnly ? "4rem" : "16rem",
+        transition: "width 0.28s cubic-bezier(.4,0,.2,1), transform 0.28s cubic-bezier(.4,0,.2,1)",
+      }}
+      aria-label="Application sidebar"
+    >
+      {/* ── Logo / Brand ────────────────────────────────────────── */}
+      <div
+        className="px-3 py-4 flex items-center shrink-0"
+        style={{
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          justifyContent: iconOnly ? "center" : "space-between",
+          gap: "0.5rem",
+        }}
+      >
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-3 group min-w-0"
+          onClick={onMobileClose}
+          aria-label="GreenTrack AI home"
+        >
+          <div
+            className="w-9 h-9 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+            style={{ borderRadius: 12, background: "rgba(255,255,255,0.06)", boxShadow: inset }}
+          >
+            <Leaf className="w-5 h-5" style={{ color: "#4ade80" }} />
+          </div>
+
+          {!iconOnly && (
+            <div className="overflow-hidden">
+              <p className="font-bold text-white text-sm leading-tight tracking-tight whitespace-nowrap">
+                GreenTrack AI
+              </p>
+              <p className="text-[11px] leading-tight whitespace-nowrap" style={{ color: "#4ade80" }}>
+                Carbon Management
+              </p>
+            </div>
+          )}
+        </Link>
+
+        {!iconOnly && <ThemeToggle buttonStyle={toggleBtnStyle} />}
+      </div>
+
+      {/* ── Org / Tier strip ────────────────────────────────────── */}
+      {!iconOnly && (
+        <div
+          className="px-4 py-2.5 flex items-center justify-between gap-2 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <p className="text-white/90 text-xs font-semibold truncate">{orgName}</p>
+          <span
+            className="shrink-0 inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={tierCfg.style}
+          >
+            {tierCfg.label}
+          </span>
+        </div>
+      )}
+
+      {/* ── Nav items ───────────────────────────────────────────── */}
+      <nav
+        className="flex-1 py-2 overflow-y-auto overflow-x-hidden"
+        style={{ paddingLeft: iconOnly ? 0 : "0.5rem", paddingRight: iconOnly ? 0 : "0.5rem" }}
+        aria-label="Main navigation"
+      >
+        <div className="space-y-0.5">
+          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                id={`tour-nav-${href.replace('/', '')}`}
+                onClick={() => {
+                  onMobileClose();
+                  if (pathname !== href && onNavigate) onNavigate();
+                }}
+                title={iconOnly ? label : undefined}
+                aria-current={active ? "page" : undefined}
+                style={activeStyle(active)}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "rgba(255,255,255,0.08)";
+                    el.style.color = "#fff";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "transparent";
+                    el.style.color = "rgba(255,255,255,0.55)";
+                  }
+                }}
+              >
+                <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                {!iconOnly && label}
+              </Link>
+            );
+          })}
+
+
+        </div>
+
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }} />
+      </nav>
+
+      {/* ── Desktop collapse toggle (hidden on mobile) ──────────── */}
+      <button
+        type="button"
+         onClick={withAsyncDisabled(onCollapseToggle)}
+        className="hidden lg:flex absolute top-[40%] -right-6 w-7 h-12 items-center justify-center group z-50 transition-all duration-300 hover:scale-110"
+        style={{
+          background: BG,
+          borderRadius: "0 100px 100px 0",
+          boxShadow: "6px 0 12px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.1)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderLeft: "none",
+          cursor: "pointer",
+        }}
+        aria-label={iconOnly ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <Leaf
+          className={`w-4 h-4 text-gt-green-400 transition-all duration-500 ease-in-out ${
+            iconOnly ? "rotate-180 scale-x-[-1]" : "rotate-0"
+          }`}
+        />
+      </button>
+
+      {/* ── User profile footer ─────────────────────────────────── */}
+      <div
+        className="shrink-0 p-3 relative"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.20)" }}
+      >
+        {showTourHint && (
+          <div className="absolute bottom-[calc(100%+8px)] left-3 z-50 w-56 p-3 rounded-xl shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-500"
+               style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}>
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(34,197,94,0.15)", color: "#4ade80" }}>
+                <PlayCircle className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-white mb-0.5">Tour Skipped</p>
+                <p className="text-[10px] text-white/70 leading-relaxed font-medium">
+                  You can restart the tour or view step-by-step guides for specific pages here anytime!
+                </p>
+              </div>
+            </div>
+            <div className="absolute -bottom-1.5 left-8 w-3 h-3 rotate-45" style={{ background: "#1e293b", borderBottom: "1px solid rgba(255,255,255,0.1)", borderRight: "1px solid rgba(255,255,255,0.1)" }} />
+          </div>
+        )}
+        {isTourMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsTourMenuOpen(false)} />
+            <div className="absolute bottom-full mb-2 left-3 w-48 rounded-xl shadow-2xl z-50 overflow-hidden"
+                 style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <div className="px-3 py-2 text-[10px] font-bold text-white/50 border-b border-white/10 uppercase tracking-wider">
+                Start Tour At...
+              </div>
+              <div className="max-h-60 overflow-y-auto p-1">
+                {NAV_ITEMS.map(({ label, href }) => (
+                  <button
+                    key={href}
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('start-tour', { detail: href }));
+                      setIsTourMenuOpen(false);
+                      if (onMobileClose) onMobileClose();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-white/10" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('start-tour'));
+                    setIsTourMenuOpen(false);
+                    if (onMobileClose) onMobileClose();
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs text-gt-green-400 hover:text-gt-green-300 hover:bg-gt-green-400/10 rounded-lg transition-colors font-semibold"
+                >
+                  Start from beginning
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+        {iconOnly ? (
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ background: "linear-gradient(145deg, #16a34a, #22c55e)", boxShadow: raised, color: "#fff" }}
+              title={userName}
+            >
+              {initials}
+            </div>
+            <button
+              type="button"
+               onClick={withAsyncDisabled(() => onSupportOpen?.())}
+              title="Help & Support"
+              aria-label="Help & Support"
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+              style={{ background: "rgba(255,255,255,0.06)", boxShadow: inset, color: "rgba(255,255,255,0.55)", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#4ade80"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)"; }}
+            >
+              <LifeBuoy className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsTourMenuOpen(!isTourMenuOpen)}
+              title="Start Tour"
+              aria-label="Start Tour"
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors relative z-50"
+              style={{ background: isTourMenuOpen ? "rgba(34,197,94,0.20)" : "rgba(255,255,255,0.06)", boxShadow: inset, color: isTourMenuOpen ? "#4ade80" : "rgba(255,255,255,0.55)", border: "none", cursor: "pointer", marginTop: "4px", marginBottom: "4px" }}
+              onMouseEnter={(e) => { if (!isTourMenuOpen) (e.currentTarget as HTMLElement).style.color = "#4ade80"; }}
+              onMouseLeave={(e) => { if (!isTourMenuOpen) (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)"; }}
+            >
+              <PlayCircle className="w-4 h-4" />
+            </button>
+            <ThemeToggle buttonStyle={{ ...toggleBtnStyle, width: 32, height: 32, borderRadius: 8 }} />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                style={{ background: "linear-gradient(145deg, #16a34a, #22c55e)", boxShadow: raised, color: "#fff" }}
+              >
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-xs font-semibold truncate leading-tight">{userName}</p>
+                <p className="text-[11px] truncate leading-tight" style={{ color: "#4ade80" }}>{userEmail}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                 onClick={withAsyncDisabled(() => onSupportOpen?.())}
+                aria-label="Help & Support"
+                className="flex items-center gap-2 text-xs font-medium transition-colors duration-150"
+                style={{ color: "rgba(255,255,255,0.45)", background: "none", border: "none", cursor: "pointer" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#4ade80"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.45)"; }}
+              >
+                <LifeBuoy className="w-3.5 h-3.5" aria-hidden="true" />
+                Help
+              </button>
+
+              <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 10 }}>·</span>
+
+              <button
+                type="button"
+                onClick={() => setIsTourMenuOpen(!isTourMenuOpen)}
+                aria-label="Start Tour"
+                className="flex items-center gap-2 text-xs font-medium transition-colors duration-150 relative z-50"
+                style={{ color: isTourMenuOpen ? "#4ade80" : "rgba(255,255,255,0.45)", background: "none", border: "none", cursor: "pointer" }}
+                onMouseEnter={(e) => { if (!isTourMenuOpen) (e.currentTarget as HTMLElement).style.color = "#4ade80"; }}
+                onMouseLeave={(e) => { if (!isTourMenuOpen) (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.45)"; }}
+              >
+                <PlayCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                Tour
+              </button>
+
+              <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 10 }}>·</span>
+
+              <button
+                type="button"
+                 onClick={withAsyncDisabled(handleSignOut)}
+                aria-label="Sign out"
+                className="flex items-center gap-2 text-xs font-medium transition-colors duration-150"
+                style={{ color: "rgba(255,255,255,0.35)", background: "none", border: "none", cursor: "pointer" }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#fb923c")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)")}
+              >
+                <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </aside>
+
+    </>
+  );
+}
