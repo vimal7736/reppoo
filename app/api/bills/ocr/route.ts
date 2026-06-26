@@ -77,6 +77,17 @@ export async function POST(request: Request) {
     const inputSource = new mindee.BytesInput({ inputBytes: Buffer.from(fileBuffer), filename: fileName || "bill.pdf" });
 
     let response;
+    
+    // Workaround for Next.js + Undici dispatcher issue:
+    // Some libraries (like Mindee SDK) pass `dispatcher` to fetch, which Next.js native fetch rejects.
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      if (init && 'dispatcher' in (init as any)) {
+        delete (init as any).dispatcher;
+      }
+      return originalFetch(url, init);
+    };
+
     try {
       console.log("[OCR Route] Starting enqueueAndGetResult for model:", process.env.MINDEE_MODEL_ID);
       response = await mindeeClient.enqueueAndGetResult(
@@ -91,6 +102,9 @@ export async function POST(request: Request) {
         { error: `MINDEE_API_FAILED: ${mindeeErr?.message ?? "Unknown error"}. Please enter values manually.` },
         { status: 500 }
       );
+    } finally {
+      // Restore original fetch
+      global.fetch = originalFetch;
     }
 
     // Each OcrPage has a .content string (full page text) and .words array
