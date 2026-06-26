@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     const inputSource = new mindee.BytesInput({ inputBytes: Buffer.from(fileBuffer), filename: fileName || "bill.pdf" });
 
     let response;
-    
+
     // Workaround for Next.js + Undici dispatcher issue:
     // Some libraries (like Mindee SDK) pass `dispatcher` to fetch, which Next.js native fetch rejects.
     const originalFetch = global.fetch;
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     };
 
     try {
+
       console.log("[OCR Route] Starting enqueueAndGetResult for model:", process.env.MINDEE_MODEL_ID);
       response = await mindeeClient.enqueueAndGetResult(
         mindee.product.Ocr,
