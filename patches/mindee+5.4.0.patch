@@ -1,29 +1,56 @@
 diff --git a/node_modules/mindee/src/http/apiCore.js b/node_modules/mindee/src/http/apiCore.js
-index be77aca..43240a3 100644
+index be77aca..f93dbfb 100644
 --- a/node_modules/mindee/src/http/apiCore.js
 +++ b/node_modules/mindee/src/http/apiCore.js
-@@ -21,15 +21,15 @@ export async function cutDocPages(inputDoc, pageOptions) {
+@@ -1,5 +1,5 @@
+ import { logger } from "../logger.js";
+-import { request } from "undici";
++import axios from "axios";
+ import { LocalInputSource } from "../input/index.js";
+ export const TIMEOUT_SECS_DEFAULT = 120;
+ /**
+@@ -21,15 +21,34 @@ export async function cutDocPages(inputDoc, pageOptions) {
   */
  export async function sendRequestAndReadResponse(dispatcher, options, url) {
      url ?? (url = `https://${options.hostname}${options.path}`);
 -    const response = await request(url, {
-+    const fetchOptions = {
++    const axiosOptions = {
          method: options.method,
++        url: url,
          headers: options.headers,
 -        headersTimeout: options.timeoutSecs * 1000,
-         body: options.body,
+-        body: options.body,
 -        dispatcher: dispatcher,
 -    });
++        data: options.body,
++        timeout: options.timeoutSecs ? options.timeoutSecs * 1000 : 120000,
 +    };
-+    const response = await fetch(url, fetchOptions);
++    
++    // Convert headers for form-data if necessary
++    if (options.body && typeof options.body.getHeaders === 'function') {
++        axiosOptions.headers = { ...axiosOptions.headers, ...options.body.getHeaders() };
++    }
++
++    let response;
++    try {
++        response = await axios(axiosOptions);
++    } catch (error) {
++        if (error.response) {
++            response = error.response;
++        } else {
++            throw error;
++        }
++    }
++
 +    const responseMessageObj = { statusCode: response.status, headers: response.headers };
      logger.debug("Parsing the response ...");
 -    let responseBody = await response.body.text();
-+    let responseBody = await response.text();
++    
++    let responseBody = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
      // handle empty responses from server, for example, in the case of redirects
      if (!responseBody) {
          responseBody = "{}";
-@@ -38,14 +38,14 @@ export async function sendRequestAndReadResponse(dispatcher, options, url) {
+@@ -38,14 +57,14 @@ export async function sendRequestAndReadResponse(dispatcher, options, url) {
          const parsedResponse = JSON.parse(responseBody);
          logger.debug("JSON parsed successfully, returning plain object.");
          return {
