@@ -1,0 +1,13 @@
+diff --git a/node_modules/mindee/src/http/apiCore.js b/node_modules/mindee/src/http/apiCore.js
+index be77aca..49d4e72 100644
+--- a/node_modules/mindee/src/http/apiCore.js
++++ b/node_modules/mindee/src/http/apiCore.js
+@@ -26,7 +26,7 @@ export async function sendRequestAndReadResponse(dispatcher, options, url) {
+         headers: options.headers,
+         headersTimeout: options.timeoutSecs * 1000,
+         body: options.body,
+-        dispatcher: dispatcher,
++        // dispatcher: dispatcher, // Removed to fix Next.js 14 Undici conflict
+     });
+     logger.debug("Parsing the response ...");
+     let responseBody = await response.body.text();
