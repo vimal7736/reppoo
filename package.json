@@ -15,7 +15,6 @@
     "@tanstack/react-table": "^8.21.3",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
-    "@vercel/analytics": "^1.5.0",
     "dotenv": "^17.4.2",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^1.8.0",
@@ -40,5 +39,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

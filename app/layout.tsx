@@ -10,7 +10,6 @@ const inter = Manrope({
   variable: "--font-inter",
   display: "swap",
 });
-import { Analytics } from "@vercel/analytics/next";
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.greentrackai.com";
 
@@ -171,7 +170,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <CookieBanner />
         </ThemeProvider>
-        <Analytics />
       </body>
     </html>
   );
