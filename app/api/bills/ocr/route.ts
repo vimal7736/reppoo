@@ -72,22 +72,69 @@ export async function POST(request: Request) {
       );
     }
 
-    const mindee = await import("mindee");
-    const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_API_KEY! });
-    const inputSource = new mindee.BytesInput({ inputBytes: Buffer.from(fileBuffer), filename: fileName || "bill.pdf" });
-
     let response;
-
     try {
-      console.log("[OCR Route] Starting enqueueAndGetResult for model:", process.env.MINDEE_MODEL_ID);
-      response = await mindeeClient.enqueueAndGetResult(
-        mindee.product.Ocr,
-        inputSource,
-        { modelId: process.env.MINDEE_MODEL_ID! }
+      console.log("[OCR Route] Starting manual enqueue via Axios for model:", process.env.MINDEE_MODEL_ID);
+      
+      const FormData = (await import("form-data")).default;
+      const axios = (await import("axios")).default;
+      
+      const form = new FormData();
+      form.append("file", Buffer.from(fileBuffer), { filename: fileName || "bill.pdf" });
+      if (process.env.MINDEE_MODEL_ID) {
+        form.append("model_id", process.env.MINDEE_MODEL_ID);
+      }
+
+      // 1. Enqueue
+      const enqueueRes = await axios.post(
+        "https://api.mindee.net/v2/products/ocr/enqueue",
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            Authorization: `Token ${process.env.MINDEE_API_KEY}`,
+          },
+          timeout: 60000,
+        }
       );
-      console.log("[OCR Route] enqueueAndGetResult finished successfully.");
+      
+      const jobId = enqueueRes.data?.job?.id;
+      if (!jobId) throw new Error("Failed to get job ID from Mindee");
+      
+      console.log("[OCR Route] Job enqueued:", jobId);
+      
+      // 2. Poll
+      let docResult;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const jobRes = await axios.get(`https://api.mindee.net/v2/jobs/${jobId}`, {
+          headers: { Authorization: `Token ${process.env.MINDEE_API_KEY}` },
+        });
+        
+        const status = jobRes.data?.job?.status;
+        console.log(`[OCR Route] Polling... status: ${status}`);
+        if (status === "Processed" || status === "completed") {
+          const resultUrl = jobRes.data?.job?.resultUrl;
+          if (resultUrl) {
+             const finalRes = await axios.get(resultUrl, {
+               headers: { Authorization: `Token ${process.env.MINDEE_API_KEY}` },
+             });
+             docResult = finalRes.data;
+          } else {
+             docResult = jobRes.data;
+          }
+          break;
+        }
+        if (status === "Failed" || status === "failed") {
+          throw new Error("Mindee processing failed");
+        }
+      }
+      
+      if (!docResult) throw new Error("Polling timeout");
+      response = docResult;
+      console.log("[OCR Route] manual processing finished successfully.");
     } catch (mindeeErr: any) {
-      console.error("Mindee OCR error:", mindeeErr);
+      console.error("Mindee OCR error:", mindeeErr?.response?.data || mindeeErr);
       return NextResponse.json(
         { error: `MINDEE_API_FAILED: ${mindeeErr?.message ?? "Unknown error"}. Please enter values manually.` },
         { status: 500 }
